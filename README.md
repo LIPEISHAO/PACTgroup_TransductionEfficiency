@@ -1,8 +1,8 @@
 # Scripts
-This is the code for generating figures in LongvsShort_Products_project.
+This is the code for generating figures in "Transduction Efficiency in CAR T-cell products" project.
 
 # Project: 
-Phenotype differences between two CAR T-cell products (3-days products vs 7-days products).
+Transduction Efficiency in clinical CAR T-cell products: a retrospective study at a single center
 
 # Citation
 Manuscrcipt is under review
