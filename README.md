@@ -5,7 +5,7 @@ This is the code for generating figures in "Transduction Efficiency in CAR T-cel
 Transduction Efficiency in clinical CAR T-cell products: a retrospective study at a single center
 
 # Citation
-Lipei Shao, Michaela Prochazkova, Yihua Cai, Kyu Lee Han, Kathryn Martin, Rongye Shi, Ruyan Yang, Jinxia Ma, Yanyan Zheng, Pamela Garces, Sue-Ellen Frodigh, Victoria Pham, Nan Zhang, Robert P. Somerville, David F. Stroncek, Ping Jin. 
+Lipei Shao, et al.
 "Transduction efficiency in clinical CAR T-cell products: a retrospective study at a single center". Under review
 
 # Contacts<br>
