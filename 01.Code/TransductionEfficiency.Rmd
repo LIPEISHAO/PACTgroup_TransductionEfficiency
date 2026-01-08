@@ -1,0 +1,897 @@
+---
+title: "TE%project"
+output: html_document
+date: "2025-06-25"
+aim: Figure visualization in Transduction Efficiency Project
+author: lipei.shao@nih.gov
+---
+
+# Load required packages
+```{r load required packages}
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(readxl)
+library(ggrepel)
+library(dplyr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(enrichplot)
+library(ComplexHeatmap)
+library(circlize)
+library(scales)
+library(ggplotify)
+```
+
+# Set parameters
+```{r set parameters}
+input_dir = "../02.Input/"
+output_dir = "../03.Output/"
+retrovirus <- "#1f77b4"  # blue
+lentivirus <- "#d62728"  # red
+color_values = c(
+  "P_001" = "#A79393", "P_002" = "#FF999E", "P_003" = "#FF6F61",
+  "P_004" = "#CC1C2F", "P_005" = "red", "P_006"="#69000C",    # Lenti protocols
+  "P_007" = "#8799B0", "P_008" = "#A1C4F1", "P_009" = "#468FD0", 
+  "P_010" = "#00366C"   # Retro protocols
+)
+color_values_v1 <- alpha(color_values, 0.6)
+gender_color <- c("orange","lightgreen")
+pathway_colors <- c("Proliferation" = "#EEDACA",   
+                  "Cytotoxicity" = "#99C4CF",
+                  "OXPHOS" = "#FEC187") 
+TE_value <- c("#440154","#21918C","#FDE725")
+```
+
+# Load data
+```{r load data}
+TE_protocol <- read_excel(paste0(input_dir,'AllData.xlsx'),"TE_Protocols")
+TE_VCN <- read_excel(paste0(input_dir,'AllData.xlsx'),"TE_VCN")
+CD3_startingMaterials <- read_excel(paste0(input_dir,'AllData.xlsx'),"CD3_SM")
+Viability <- read_excel(paste0(input_dir,'AllData.xlsx'),"Viability_SM") 
+PBMC_startingMaterials <- read_excel(paste0(input_dir,'AllData.xlsx'),"PBMC_SM") 
+cd4cd8_startingMaterials <- read_excel(paste0(input_dir,'AllData.xlsx'),"CD4CD8-enriched_SM")
+Age <- read_excel(paste0(input_dir,'AllData.xlsx'),"Age") 
+Gender <- read_excel(paste0(input_dir,'AllData.xlsx'),"Gender") 
+SubsetFN <- read_excel(paste0(input_dir,'AllData.xlsx'),"Subset_FN")
+FN_indexes <- read_excel(paste0(input_dir,'AllData.xlsx'),"FN_index")
+TE_CCR7 <- read_excel(paste0(input_dir,'AllData.xlsx'),"TE_CCR7") 
+Coefficient <- read_excel(paste0(input_dir,'AllData.xlsx'),"Coefficient") 
+ExpressionMatrix <- read_excel(paste0(input_dir,'AllData.xlsx'),"Matrix") 
+Matrix_metadata <- read_excel(paste0(input_dir,'AllData.xlsx'),"Matrix_metadata") 
+```
+
+# Fig1
+``` {r Fig1b. TE in all products}
+TE_protocol$Protocol <- factor(TE_protocol$Protocol,
+                               levels = c("P_001","P_002","P_003","P_004","P_005","P_006",
+                                          "P_007","P_008","P_009","P_010"))
+set.seed(10) #for productivity purpose
+ggplot(TE_protocol, aes(x = "", y = TE)) +
+  geom_boxplot(outlier.shape = NA, fill = "grey95", color = "grey90") +
+  geom_jitter(aes(color = Protocol),
+              position = position_jitter(width = 0.2, height = 0),
+              size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_classic() +
+  scale_color_manual(
+    name = "Protocol",  # Legend title
+    values = color_values_v1,
+    labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+               "P_007","P_008", "P_009","P_010")
+  ) +
+  labs(x = NULL, y = "Transduction Efficiency (%)") +
+  theme(
+    axis.text.x = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    legend.position = "right"
+  )
+```
+
+# Fig2
+``` {r Fig2a. TE across protocols}
+TE_protocol$Protocol <- factor(TE_protocol$Protocol,
+                               levels = c("P_001","P_002","P_003","P_004","P_005","P_006",
+                                          "P_007","P_008","P_009","P_010"))
+set.seed(21) #for productivity purpose
+ggplot(TE_protocol, aes(x=Protocol,y = TE,color = Protocol)) + 
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_bw()+
+  scale_color_manual(
+    name = "Protocol",  # Legend title
+    values = color_values_v1,
+    labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+               "P_007","P_008", "P_009","P_010")
+  ) +
+  labs(x = "Protocol",y = "Transduction Efficiency (%)")+
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.text.y = element_text(size = 10),
+    axis.title.y = element_text(size = 12)
+  )
+```
+``` {r FigS2a-left. VCN (lentivirus vs retrovirus)}
+wilcox_test <- wilcox.test(VCN ~ Vector, data = TE_VCN)
+pvalue <- wilcox_test$p.value 
+set.seed(22) 
+ggplot(TE_VCN, aes(x = Vector, y=VCN,color = Protocol)) + 
+  geom_boxplot(outlier.shape = NA, width = 0.4, color = "grey50") +
+  stat_summary(fun = mean, geom = "line")+
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+              size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_bw()+
+  scale_color_manual(
+    name = "Protocol",  # Legend title
+    values = color_values_v1,
+    labels = c("P_001", "P_002", "P_003", "P_004", "P_005",
+               "P_007","P_008", "P_009","P_010")
+  ) +
+  labs(x = "Vector",y = "Vector Copy Number\n (Copies/μl)")+
+  annotate("text", x = 1.5, y = max(TE_VCN$VCN, na.rm = TRUE) * 1.05,
+           label = paste0("p_value = ", pvalue), size = 2.5)+
+  annotate("text", x = 2.3, y = min(TE_VCN$VCN, na.rm = TRUE) * 1.05,
+           label = paste0("(n = 131)"), size = 2.5)+
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.text.y = element_text(size = 10),
+    axis.title.y = element_text(size = 12)
+  )
+```
+``` {r FigS2a-right. TE (lentivirus vs retrovirus)}
+wilcox_test <- wilcox.test(CAR ~ Vector, data = TE_VCN)
+pvalue <- wilcox_test$p.value 
+set.seed(23) 
+ggplot(TE_VCN, aes(x = Vector, y=CAR,color = Protocol)) + 
+  geom_boxplot(outlier.shape = NA, width = 0.4, color = "grey50") +
+  stat_summary(fun = mean, geom = "line")+
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+              size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_bw()+
+  scale_color_manual(
+    name = "Protocol",  # Legend title
+    values = color_values_v1,
+    labels = c("P_001", "P_002", "P_003", "P_004", "P_005",
+               "P_007","P_008", "P_009","P_010")
+  ) +
+  labs(x = "Vector",y = "Transduction Efficiency (%)")+
+  annotate("text", x = 1.5, y = max(TE_VCN$CAR, na.rm = TRUE) * 1.05,
+           label = paste0("p_value = ", pvalue), size = 2.5)+
+  annotate("text", x = 2.3, y = min(TE_VCN$CAR, na.rm = TRUE) * 1.05,
+           label = paste0("(n = 131)"), size = 2.5)+
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.text.y = element_text(size = 10),
+    axis.title.y = element_text(size = 12)
+  )
+```
+``` {r Fig2b. TE (lenti vs Retro)}
+wilcox_test <- wilcox.test(TE ~ Vector, data = TE_protocol)
+pvalue <- wilcox_test$p.value
+set.seed(24) 
+ggplot(TE_protocol, aes(x = Vector, y=TE,color = Protocol)) + 
+  geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+  stat_summary(fun = mean, geom = "line")+
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+              size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_bw()+
+  scale_color_manual(
+    name = "Protocol",  
+    values = color_values_v1,
+    labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+               "P_007","P_008", "P_009","P_010")
+  ) +
+  labs(title = "",x = "Vector",y = "Transduction Efficiency (%)")+
+  annotate("text", x = 1.5, y = max(TE_protocol$TE, na.rm = TRUE) * 1.05,
+           label = paste0("p_value = ", pvalue), size = 2.5)+
+  annotate("text", x = 2.3, y = min(TE_protocol$TE, na.rm = TRUE) * 1.05,
+           label = paste0("(n = 204)"), size = 2.5)+
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.text.y = element_text(size = 10),
+    axis.title.y = element_text(size = 12)
+  )
+```
+``` {r Fig2c. TE (CD4/CD8-enriched vs PBMC}
+TE_protocol$Protocol <- factor(TE_protocol$Protocol,
+                               levels = c("P_001","P_002","P_003","P_004","P_005","P_006",
+                                          "P_007","P_008","P_009","P_010"))
+TE_protocol$Enrichment <- factor(TE_protocol$Enrichment, levels = c("CD4/CD8-enriched","PBMC"))
+wilcox_test <- wilcox.test(TE ~ Enrichment, data = TE_protocol)
+pvalue <- wilcox_test$p.value   
+set.seed(25) #for productivity purpose
+ggplot(TE_protocol, aes(x = Enrichment, y=TE,color = Protocol)) + 
+  geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+  stat_summary(fun = mean, geom = "line")+
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+              size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_bw()+
+  scale_color_manual(
+    name = "Protocol",  # Legend title
+    values = color_values_v1,
+    labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+               "P_007","P_008", "P_009","P_010")
+  ) +
+  labs(x = "T cell enrichment",y = "Transduction Efficiency (%)")+
+  annotate("text", x = 1.5, y = max(TE_protocol$TE, na.rm = TRUE) * 1.05,
+           label = paste0("p_value = ", pvalue), size = 2.5)+
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.text.y = element_text(size = 10),
+    axis.title.y = element_text(size = 12)
+  )
+```
+``` {r Fig2d. TE (TransAct,Dynabeads,Anti-CD3)}
+TE_protocol$Activation <- factor(TE_protocol$Activation, 
+                                   levels = c("TransAct","Dynabeads","Anti-CD3"))
+set.seed(26) 
+ggplot(TE_protocol, aes(x = Activation, y=TE,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+    stat_summary(fun = mean, geom = "line")+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+                size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_bw()+
+    scale_color_manual(
+      name = "Protocol", 
+      values = color_values_v1,
+      labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+                 "P_007","P_008", "P_009","P_010")
+    ) +
+    labs(x = "Activation method",y = "Transduction Efficiency (%)")+
+    theme(
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12),
+      axis.text.y = element_text(size = 10),
+      axis.title.y = element_text(size = 12)
+    )
+```
+``` {r Fig2e. TE (Prodigy vs bag)}
+TE_protocol$Expansion <- factor(TE_protocol$Expansion,levels = c("Prodigy","Bag"))
+  wilcox_test <- wilcox.test(TE ~ Expansion, data = TE_protocol)
+  pvalue <- wilcox_test$p.value  
+  set.seed(27) 
+  ggplot(TE_protocol, aes(x = Expansion, y=TE,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+    stat_summary(fun = mean, geom = "line")+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+                size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_bw()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1,
+      labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+                 "P_007","P_008", "P_009","P_010")
+    ) +
+    labs(x = "Expansion method",y = "Transduction Efficiency (%)")+
+    annotate("text", x = 1.5, y = max(TE_protocol$TE, na.rm = TRUE) * 1.05,
+             label = paste0("p_value = ", pvalue), size = 2.5)+
+    theme(
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12),
+      axis.text.y = element_text(size = 10),
+      axis.title.y = element_text(size = 12)
+    )
+```
+``` {r FigS2b. TE (TexMACS vs AIM-V)}
+TE_protocol$Media <- factor(TE_protocol$Media,levels = c("TexMACS","AIM-V"))
+  pvalue <- c(7.46e-11)    
+  set.seed(28) 
+  ggplot(TE_protocol, aes(x = Media, y=TE,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+    stat_summary(fun = mean, geom = "line")+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+                size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_bw()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1,
+      labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+                 "P_007","P_008", "P_009","P_010")
+    ) +
+    labs(x = "Media",y = "Transduction Efficiency (%)")+
+    annotate("text", x = 1.5, y = max(TE_protocol$TE, na.rm = TRUE) * 1.05,
+             label = paste0("p_value = ", pvalue), size = 2.5)+
+    theme(
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12),
+      axis.text.y = element_text(size = 10),
+      axis.title.y = element_text(size = 12)
+    )
+```
+``` {r FigS2c. TE (IL2 vs IL-7/IL-15)}
+TE_protocol$Cytokine <- factor(TE_protocol$Cytokine, 
+                                 levels = c("IL-2","IL-7/IL-15"))
+  wilcox_test <- wilcox.test(TE ~ Cytokine, data = TE_protocol)
+  pvalue <- wilcox_test$p.value
+  set.seed(28) #for productivity purpose
+  ggplot(TE_protocol, aes(x = Cytokines, y=TE,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+    stat_summary(fun = mean, geom = "line")+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+                size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_bw()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1,
+      labels = c("P_001", "P_002", "P_003", "P_004", "P_005","P_006",
+                 "P_007","P_008", "P_009","P_010")
+    ) +
+    labs(x = "Cytokine",y = "Transduction Efficiency (%)")+
+    annotate("text", x = 1.5, y = max(TE_protocol$TE, na.rm = TRUE) * 1.05,
+             label = paste0("p_value = ", pvalue), size = 2.5)+
+    theme(
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12),
+      axis.text.y = element_text(size = 10),
+      axis.title.y = element_text(size = 12)
+    )
+```
+
+# Fig3
+``` {r FigS3a. Viability in starting material}
+Viability$Viability <- as.numeric(Viability$Viability)
+  set.seed(31) 
+  ggplot(Viability, aes(x=New_ID,y = Viability,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA)+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_classic()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1
+    ) +
+    labs(x = "Protocol",y = "Cell Viability (%)",
+         title = "")+
+    theme(axis.text.x = element_text(size = 10,angle = 20, hjust = 0.8),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12),
+          legend.position = "none")
+```
+``` {r Fig3a. CD3 in starting material}
+CD3_startingMaterials$CD3 <- as.numeric(CD3_startingMaterials$CD3)
+set.seed(32) 
+ggplot(na.omit(CD3_startingMaterials), aes(x=Protocol,y = CD3,color = Protocol)) + 
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  theme_bw()+
+  scale_color_manual(
+    name = "Protocol",  # Legend title
+    values = color_values_v1
+  ) +
+  labs(x = "Protocol",y = "CD3+ in Starting Material (%)",
+       title = "")+
+  facet_wrap(~`Starting Material`,scales = "free_x")+
+  theme(axis.text.x = element_text(size = 10,angle = 20, hjust = 0.8),
+        axis.title.x = element_text(size = 12),
+        axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12),
+        legend.position = "none")
+```
+``` {r Fig3b. CD4 and CD8 in starting material}
+names(cd4cd8_startingMaterials)
+  cd4cd8_startingMaterials <- cd4cd8_startingMaterials %>%
+    mutate(MaterialGroup = "CD4/CD8-enriched")   # one constant label
+  df_long <- cd4cd8_startingMaterials %>%
+    pivot_longer(cols = c(CD4, CD8),
+                 names_to = "Marker",
+                 values_to = "Value")
+  df_long$Marker <- factor(df_long$Marker,levels = c("CD4","CD8"))
+  set.seed(33)
+  ggplot(na.omit(df_long),
+         aes(x = Value, y = TE, color = Protocol)) +
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 1) +
+    facet_grid(rows = vars(`MaterialGroup`),cols = vars(`Marker`),scales = "free_x")+
+    theme_bw() +
+    labs(x = "Percentage in Starting Material (%)",
+         y = "Transduction Efficiency (%)",
+         title = "") +
+    scale_color_manual(
+      name = "Protocol",
+      values = color_values_v1 +
+    theme(axis.text.x = element_text(size = 10,hjust = 0.8),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12),
+          strip.text.y.right = element_text(size = 11))
+```
+``` {r Fig3c. Immune cells in starting material}
+  names(PBMC_startingMaterials)
+    PBMC_startingMaterials <- PBMC_startingMaterials %>%
+    mutate(MaterialGroup = "PBMC")   # one constant label
+  
+  df_long <- PBMC_startingMaterials %>%
+    pivot_longer(cols = c(CD3, CD56,CD14,CD15),
+                 names_to = "Marker",
+                 values_to = "Value")
+  df_long$Marker <- factor(df_long$Marker,levels = c("CD3","CD56","CD14","CD15"))
+  set.seed(34)
+  ggplot(na.omit(df_long),
+         aes(x = Value, y = TE, color = Protocol)) +
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 1) +
+    facet_grid(rows = vars(`MaterialGroup`),
+               cols = vars(`Marker`),scales = "free_x",
+               labeller = labeller(Marker = c("CD3" = "CD3 (T cells)",
+                                              "CD56" = "CD56 (NK cells)",
+                                              "CD14" = "CD14 (Monocytes)",
+                                              "CD15" = "CD15 (Neutrophils)")))+
+    theme_bw() +
+    labs(x = "Percentage in Starting Material (%)",
+         y = "Transduction Efficiency (%)",
+         title = "") +
+    scale_color_manual(
+      name = "Protocol",
+      values = color_values_v1
+    )+
+    theme(axis.text.x = element_text(size = 10,hjust = 0.8),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12),
+          strip.text.y.right = element_text(size = 11))
+```
+``` {r FigS3b. CD4/CD8 ratio starting material}
+  cd4cd8_startingMaterials <- cd4cd8_startingMaterials %>%
+    mutate(CD4_CD8_ratio = CD4 / CD8)
+  cd4cd8_startingMaterials$TE <- as.numeric(cd4cd8_startingMaterials$TE)
+  cd4cd8_startingMaterials$CD4_CD8_ratio <- as.numeric(cd4cd8_startingMaterials$CD4_CD8_ratio)
+  cor_test <- cor.test(cd4cd8_startingMaterials$TE, cd4cd8_startingMaterials$CD4_CD8_ratio)
+  cor_value <- round(cor_test$estimate, 2) 
+  p_value <- cor_test$p.value   
+  set.seed(35) 
+  ggplot(na.omit(cd4cd8_startingMaterials), aes(x = CD4_CD8_ratio, y=TE,color = Protocol)) + 
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 1) +
+    theme_bw()+
+    labs(x = "CD4/CD8 ratio",y = "Transduction Efficiency (%)",title = "")+
+    geom_text(aes(x = max(CD4_CD8_ratio)-0.8,
+                  y = min(TE, na.rm = TRUE)+5, 
+                  label = paste("r=", cor_value, "\np =", p_value)), 
+              color = "black", size = 2.5)+
+    theme(plot.title = element_text(hjust = 0, size = 11))+
+    scale_color_manual(
+      name = "Protocol",
+      values = color_values_v1
+    )+
+    theme(axis.text.x = element_text(size = 10,hjust = 0.8),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12))
+```
+``` {r FigS3c. Age at apheresis}
+  Age$Age <- as.numeric(Age$Age)
+  cor_test <- cor.test(Age$Age, Age$TE)
+  cor_value <- round(cor_test$estimate, 2) 
+  p_value <- cor_test$p.value
+  set.seed(36) 
+  ggplot(na.omit(Age), aes(x = Age, y=TE,color = Protocol)) + 
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 1) +
+    theme_bw()+
+    labs(x = "Age at apheresis",y = "Transduction Efficiency (%)",title = "")+
+    scale_color_manual(
+      name = "Protocol",  
+      values = color_values_v1
+    )+
+    theme(axis.text.x = element_text(size = 10),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12))
+```
+``` {r FigS3d. Gender at apheresis}
+  wilcox_test <- wilcox.test(TE ~ Gender, data = Gender)
+  wilcox_test
+  pvalue <- c(0.17)    #cor_test$p.value
+  set.seed(37) 
+  ggplot(Gender, aes(x = Gender, y=TE,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+    stat_summary(fun = mean, geom = "line")+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+                size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_bw()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1,
+      labels = c("P_001", "P_002", "P_003", "P_004", "P_005",
+                 "P_007","P_008", "P_009","P_010")
+    ) +
+    labs(x = "Gender",y = "Transduction Efficiency (%)")+
+    annotate("text", x = 1.5, y = max(Gender$TE, na.rm = TRUE) * 1.05,
+             label = paste0("p_value = ", pvalue), size = 2.5)+
+    theme(
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12),
+      axis.text.y = element_text(size = 10),
+      axis.title.y = element_text(size = 12)
+    )
+```
+
+# Fig4
+``` {r FigS4a. CD3, CD4, CD8 in infusion products}
+FN_indexes$CD4 <- as.numeric(FN_indexes$CD4)
+  FN_indexes$CD8 <- as.numeric(FN_indexes$CD8)
+  df_long <- FN_indexes %>%
+    pivot_longer(cols = c(CD3,CD4, CD8),
+                 names_to = "Marker",
+                 values_to = "Value")
+  df_long_1 <- df_long[,c(6,7,8,9)]
+  set.seed(41) 
+  ggplot(na.omit(df_long_1), aes(x=Protocol,y = Value,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA)+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_test()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1
+    ) +
+    labs(x = "Protocol",y = "Percentage in Infusion Product (%)",
+         title = "")+
+    facet_grid(rows = vars(`Marker`),cols = vars(`Starting Material`),scales = "free_x")+
+    theme(axis.text.x = element_text(size = 10),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12),
+          legend.position = "none")
+```
+``` {r Fig4a. cd4-TE, cd8-TE in infusion products; FigS4b}
+df_long <- FN_indexes %>%
+    pivot_longer(cols = c(CD4, CD8),
+                 names_to = "Marker",
+                 values_to = "Value")
+  df_long_1 <- df_long[,c(3,7,8,9,10)]
+  table(df_long_1$Marker)
+  df_long_1_cd4 <- df_long_1[df_long_1$`Starting Material`=="CD4/CD8-enriched",]
+  df_long_1_cd4 <- df_long_1_cd4[df_long_1_cd4$Marker=="CD4",]
+  cor_test <- cor.test(df_long_1_cd4$TE, df_long_1_cd4$Value)
+  cor_test
+  set.seed(42)
+  ggplot(na.omit(df_long_1),
+         aes(x = Value, y = TE, color = Protocol)) +
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 1) +
+    facet_grid(rows = vars(`Starting Material`),cols = vars(`Marker`),scales = "free_x")+  # Fig4a
+    # facet_grid(~Marker,scales = "free_x")+   #FigS4b
+    theme_bw() +
+    labs(x = "Percentage in Infusion Product (%)",
+         y = "Transduction Efficiency (%)",
+         title = "") +
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1
+    ) +
+    theme(axis.text.x = element_text(size = 10),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12)
+          )
+```
+``` {r FigS4c. cd4/cd8 ratio - TE in infusion products}
+df_long_2 <- df_long[,c(2,3,8)]
+  cor_test <- cor.test(df_long_2$TE, df_long_2$`CD4/CD8 ratio`)
+  cor_test
+  p_value <- c(0.74)    #cor_test$p.value
+  set.seed(43) #for productivity purpose
+  ggplot(na.omit(df_long_2), aes(x = `CD4/CD8 ratio`, y=TE,color = Protocol)) + 
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 1) +
+    theme_bw()+
+    labs(x = "CD4/CD8 ratio in Infusion Products",y = "Transduction Efficiency (%)",title = "")+
+    geom_text(aes(x = max(`CD4/CD8 ratio`)-0.8,
+                  y = min(TE, na.rm = TRUE)+5, 
+                  label = paste("r=", cor_value, "\np =", p_value)), 
+              color = "black", size = 2.5)+
+    theme(plot.title = element_text(hjust = 0, size = 11))+
+    scale_color_manual(
+      name = "Protocol",
+      values = color_values_v1
+      )+
+    theme(axis.text.x = element_text(size = 10),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12)
+          )
+```
+```{r Fig4b}
+df_long <- cd3car %>%
+    pivot_longer(cols = c(Teff,Tscm,Tcm,Tem),
+                 names_to = "Marker",
+                 values_to = "Value")
+  df_long_1 <- df_long[,c(3,4,5,6)]
+  names(df_long_1)
+  df_long_1$Marker <- factor(df_long_1$Marker,levels = c("Tscm","Tcm","Tem","Teff"))
+  set.seed(44) #for productivity purpose
+  ggplot(na.omit(df_long_1), aes(x = Marker, y=Value,color = Protocol)) + 
+    geom_boxplot(outlier.shape = NA, width = 0.6, color = "grey50") +
+    stat_summary(fun = mean, geom = "line",)+
+    geom_jitter(position = position_jitter(width = 0.2, height = 0), 
+                size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    theme_bw()+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1
+    ) +
+    labs(x = "",y = "Percentage of subpopulation (%)",
+         title = "")+
+    facet_grid(~CellType,scales = "free_x")+
+    theme(axis.text.x = element_text(size = 10),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12)
+          )
+```
+```{r Fig4c}
+df_long <- cd3car %>%
+    pivot_longer(cols = c(Teff,Tscm,Tcm,Tem),
+                 names_to = "Differentiation",
+                 values_to = "Value")
+  df_long$Differentiation <- factor(df_long$Differentiation,levels = c("Tscm","Tcm",
+                                                                       "Tem","Teff"))
+  cd3car_CD3posCARpos <- cd3car[cd3car$CellType=="CD8posCARpos",]
+  cor_test <- cor.test(cd3car_CD3posCARpos$TE, cd3car_CD3posCARpos$Teff)
+  cor_test
+  p_value <- c(0.25)    #cor_test$p.value
+  set.seed(45)
+  ggplot(na.omit(df_long), aes(x = Value, y=TE,color = Protocol)) + 
+    geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+    geom_smooth(method = "lm", se = FALSE, color = "gold",
+                linetype = "dashed", size = 0.8) +
+    theme_test()+
+    labs(x = "Percentage of subpoputation (%)",y = "Transduction Efficiency (%)",
+         title = "")+
+    theme(axis.text.x = element_text(size = 10),
+          axis.title.x = element_text(size = 12),
+          axis.text.y = element_text(size = 10),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 12),
+          strip.text.y.right = element_text(size = 12))+
+    facet_grid(rows = vars(`CellType`),cols = vars(`Differentiation`),scales = "free_x")+
+    scale_color_manual(
+      name = "Protocol",  # Legend title
+      values = color_values_v1
+    )
+```
+
+# Fig5
+```{r Fig5a}
+
+names(Coefficient)
+  cor_sig <- Coefficient 
+  top_pos <- cor_sig %>% arrange(desc(Coefficient)) %>% slice(1:15) %>% pull(Symbol)
+  top_neg <- cor_sig %>% arrange(Coefficient) %>% slice(1:15) %>% pull(Symbol)
+  cor_sig <- cor_sig %>%
+    mutate(
+      col_group = case_when(
+        Symbol %in% top_pos ~ "Top_Positive",
+        Symbol %in% top_neg ~ "Top_Negative",
+        TRUE ~ "Other"
+      ),
+      size_val = -log10(FDR)
+    )
+  cor_sig <- cor_sig %>%
+    arrange(Coefficient) %>%
+    mutate(x_order = seq(1, n(), length.out = n()))
+  
+  ggplot(cor_sig, aes(x = x_order, y = Coefficient, size = size_val, color = col_group)) +
+    geom_point(alpha = 0.1,shape=1) +
+    scale_color_manual(values = c(
+      "Top_Positive" = "firebrick2",
+      "Top_Negative" = "dodgerblue3",
+      "Other" = "grey70"
+    )) +
+    scale_size(range = c(2,8)) +
+    scale_size_continuous(
+      name = expression(-Log[10](FDR)),
+      range = c(1, 6),      
+      breaks = c(1, 2, 4, 6),
+      labels = c("1", "2", "4", "≥6")
+    ) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+    theme_classic(base_size = 10) +
+    labs(
+      x = "",
+      y = "Spearman correlation with transduction efficiency",
+      color = "Group",
+      size = "-Log10(FDR)",
+      title = ""
+    ) +
+    theme(
+      axis.text.x = element_blank(),  
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 10),
+      axis.title.y = element_text(size = 10),
+      plot.title = element_text(size = 16, face="bold"),
+      legend.position = "right"
+    ) +
+    geom_text_repel(
+      data = cor_sig %>% filter(col_group != "Other"),
+      aes(label = Symbol),
+      size = 1.5, fontface = "bold", max.overlaps = 40,
+      segment.size = 0.1,
+      segment.alpha = 0.2
+    )
+```
+```{r Fig5b}
+nrDEG_GSEA <- data.frame(SYMBOL=Coefficient$Symbol,coefficient=Coefficient$Coefficient)
+  df.id <- bitr(nrDEG_GSEA$SYMBOL,
+                fromType = "SYMBOL",
+                toType = "ENTREZID",
+                OrgDb = "org.Hs.eg.db")
+  nrDEG_GSEA_2 <- merge(nrDEG_GSEA,df.id,by="SYMBOL",all=F)
+  sortednrDEG <- nrDEG_GSEA_2[order(nrDEG_GSEA_2$coefficient,decreasing = T),]
+  names(sortednrDEG)
+  gene.expr <- sortednrDEG$coefficient
+  names(gene.expr) <- sortednrDEG$ENTREZID
+  kk <- gseKEGG(gene.expr,organism = "hsa",pvalueCutoff = 10,eps = 0)
+  kkresult <- data.frame(ID=kk@result$ID,
+                         Description=kk@result$Description,
+                         setSize=kk@result$setSize,
+                         enrichmentScore=kk@result$enrichmentScore,
+                         NES=kk@result$NES,
+                         pvalue=kk@result$pvalue,
+                         p.adjust=kk@result$p.adjust,
+                         qvalue=kk@result$qvalue,
+                         rank=kk@result$rank,
+                         leading_edge=kk@result$leading_edge,
+                         core_enrichment=kk@result$core_enrichment)
+  top5_go <- kkresult[c(3,6,9,11,5),]
+  ggplot(top5_go, aes(y = reorder(Description, NES), x = NES)) +
+    geom_bar(stat = "identity",fill = "#FF999E") +
+    geom_text(aes(label = paste0("qvalue = ", sprintf("%.2g", qvalue)),
+                  x = 0.05),    
+              size = 2, hjust = 0,color="navy") +
+    labs(title = "",
+         x = "Normalized Enrichment Score (NES)",
+         y = "",
+         fill = "qvalue") +
+    theme_classic(base_size = 6)+
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      axis.title.x = element_text(size = 9,margin = margin(t=8)),
+      axis.title.y = element_text(size = 9),
+      axis.text.x = element_text(size = 6),
+      axis.text.y = element_text(size = 8, hjust = 1, 
+                                 margin = margin(r = 2)),  # ensure alignment
+      legend.title = element_text(size = 10),
+      legend.text = element_text(size = 8)
+    )+
+    scale_y_discrete(expand = expansion(mult = c(0.15, 0.15)))
+```
+```{r Fig5c}
+  metadata <- Matrix_metadata
+  ExpressionMatrix
+  sample_names <- colnames(ExpressionMatrix)
+  group <- ifelse(grepl("^P_001", sample_names),           "P_001",
+                  ifelse(grepl("^P_004", sample_names), "P_004",
+                         ifelse(grepl("^P_009", sample_names),     "P_009",
+                                ifelse(grepl("^P_010", sample_names),   "P_010",
+                                       ifelse(grepl("^P_006", sample_names),     "P_006", 
+                                              NA)))))
+  sample_anno <- data.frame(
+    Protocol = group,
+    row.names = sample_names,
+    stringsAsFactors = FALSE
+  )
+  Proliferation <- c("MCM4", "RFC2", "MCM2", "MCM5", "POLD2", "MCM3",
+                     "TYMS", "LIG1", "POLE2", "POLD1",
+                     "POLD3", "MCM6", "RFC4", "MCM7", "MKI67", "RPA1",
+                     "PCNA", "SSBP1", "RPA2", "DNA2", "RFC5", "EXO1", 
+                     "MSH2", "MLH1", "PMS2",
+                     "CKAP5", "AURKA", "BUB1", "NEK2", "NCAPH", "NCAPD2", 
+                     "UBE2I", "TFDP1", "AKT1", "TP53", "CDKN1A", 
+                     "TGFB1", "CD7", "AKT2", "PPP2R5D")  #DNA replication and cell cycle
+  Cytotoxicity <- c("NCR3", 
+                    "FAS", "SH3BP2", "PRF1", "CD247", "ICAM1", "SOS2", 
+                    "ITGB2", "LCK", "ZAP70", "PTPN6",
+                    "GZMA", "CD244", "VAV1", "TNF", "KLRD1", "CSF2", 
+                    "NFATC1", "FASLG", "CASP3", "IFNAR1", "VAV3", 
+                    "IFNGR1", "GZMM", "FYN", "BID", "ARAF","TNFRSF10B", "PTK2B", "RAC2", "IFNGR2")
+  OXPHOS <- c("NDUFS7", "NDUFS8", "NDUFAF3", "TIMM22", "TIMM44", "COQ2", "BCS1L", 
+              "COA7", "COASY", "COX18", "CLPP", "CLPB", "MECR", "TXNRD3", "MTOR", 
+              "GOT1", "GOT2", "PDHA1", "NAPRT")
+  
+  all_genes <- unique(c(Proliferation,Cytotoxicity,OXPHOS))
+  gene_anno_df <- data.frame(
+    Module = ifelse(all_genes %in% Proliferation, "Proliferation",
+                    ifelse(all_genes %in% Cytotoxicity,"Cytotoxicity", "OXPHOS")),
+    row.names = all_genes,
+    stringsAsFactors = FALSE
+  )
+  gene_anno_df$Module <- factor(gene_anno_df$Module, levels = c("Proliferation","Cytotoxicity","OXPHOS"))
+  
+  left_anno <- rowAnnotation(
+    Module = gene_anno_df$Module,
+    col = list(Module = pathway_colors),
+    width = unit(4, "mm"),
+    annotation_name_gp = gpar(fontsize = 10, fontface = "bold")
+  )
+  
+  expr_mat <- as.matrix(ExpressionMatrix[all_genes, , drop = FALSE])
+  expr_scaled <- t(scale(t(expr_mat)))
+  expr_scaled[is.na(expr_scaled) | is.infinite(expr_scaled)] <- 0
+  
+  ord <- order(sample_anno$Protocol, Matrix_metadata$TE)
+  expr_scaled <- expr_scaled[, ord]
+  
+  top_anno <- HeatmapAnnotation(
+    TE_value = Matrix_metadata$TE,
+    col = list(
+      TE_value = colorRamp2(
+        breaks = c(min(Matrix_metadata$TE), 
+                   mean(Matrix_metadata$TE), 
+                   max(Matrix_metadata$TE)),
+        colors =  TE_value
+      )
+    ),
+    annotation_name_gp = gpar(fontsize = 12),
+    annotation_legend_param = list(
+      TE_value = list(title = "TE value", 
+                      title_gp = gpar(fontsize = 12),
+                      labels_gp = gpar(fontsize = 10))
+    )
+  )
+  
+  bottom_anno <- HeatmapAnnotation(
+    Protocol = sample_anno$Protocol,
+    col = list(Protocol = color_values_v1),
+    annotation_name_gp = gpar(fontsize = 11, fontface = "bold"),
+    simple_anno_size = unit(5, "mm"),
+    which = "column"   
+  )
+  set.seed(50)
+  Heatmap(
+    expr_scaled,
+    name = "Z-score",
+    column_title = "",
+    row_title = "",
+    top_annotation = top_anno,
+    bottom_annotation = bottom_anno,
+    left_annotation = left_anno,        
+    cluster_rows = F,
+    cluster_columns = T,
+    show_row_names = T,      
+    show_column_names = F,  
+    row_names_gp = gpar(fontsize = 4,fontface = "italic"),
+    column_names_gp = gpar(fontsize = 6,fontface = "italic"),
+    heatmap_legend_param = list(title_gp = gpar(fontsize = 10)),
+    col = colorRamp2(c(-4, 0, 4), c("navy","white", "red3"))
+  )
+```
+```{r FigS5}
+TE_CCR7$TE <- as.numeric(TE_CCR7$TE)
+TE_CCR7$CCR7 <- as.numeric(TE_CCR7$CCR7)
+cor_test <- cor.test(TE_CCR7$TE, TE_CCR7$CCR7)
+cor_value <- round(cor_test$estimate, 2) 
+cor_test$p.value
+p_value <- c(0.01)    #cor_test$p.value
+set.seed(54) #for productivity purpose
+ggplot(na.omit(TE_CCR7), aes(x = TE, y=CCR7,color = Protocol)) + 
+  geom_point(size = 2, alpha = 0.6, stroke = 0.2,shape = 16) +
+  geom_smooth(method = "lm", se = FALSE, color = "gold",
+              linetype = "dashed", size = 1) +
+  theme_bw()+
+  labs(x = "Transduction Efficiency (%)",y = "CCR7 expression level (TPM)",title = "")+
+  geom_text(aes(x = max(TE)-0.8,
+                y = min(CCR7, na.rm = TRUE)+5, 
+                label = paste("r=", cor_value, "\np =", p_value)), 
+            color = "black", size = 2.5)+
+  theme(plot.title = element_text(hjust = 0, size = 11))+
+  scale_color_manual(
+    name = "Protocol",
+    values = car_colors
+  )+
+  theme(axis.text.x = element_text(size = 10,hjust = 0.8),
+        axis.title.x = element_text(size = 12),
+        axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12))
+```
